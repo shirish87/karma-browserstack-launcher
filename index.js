@@ -102,7 +102,6 @@ var BrowserStackBrowser = function(id, emitter, args, logger,
       os_version: args.os_version,
       device: args.device,
       browser: args.browser,
-      video: !args.os.match(/ios/i),
       tunnelIdentifier: bsConfig.tunnelIdentifier,
       // TODO(vojta): remove "version" (only for B-C)
       browser_version: args.browser_version || args.version || 'latest',

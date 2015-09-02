@@ -123,10 +123,14 @@ var BrowserStackBrowser = function(id, emitter, args, logger,
     this.url = url;
     var self = this;
 
-    tunnel.then(function() {
+    tunnel.then(function (url) {
+      url += '?id=' + id;
+
       self.url = url;
       settings.url = url;
-console.log(settings);
+
+      console.log('Creating worker', settings);
+
       client.createWorker(settings, function(error, worker) {
         var sessionUrlShowed = false;
 

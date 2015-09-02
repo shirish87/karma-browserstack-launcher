@@ -1,7 +1,6 @@
 var q = require('q');
 var api = require('browserstack');
-var BrowserStackTunnel = require('browserstacktunnel-wrapper');
-
+var ngrok = require('ngrok');
 
 var createBrowserStackTunnel = function(logger, config, emitter) {
   var log = logger.create('launcher.browserstack');
@@ -18,32 +17,23 @@ var createBrowserStackTunnel = function(logger, config, emitter) {
   log.debug('Establishing the tunnel on %s:%s', config.hostname, config.port);
 
   var deferred = q.defer();
-  var tunnel = new BrowserStackTunnel({
-    key: process.env.BROWSER_STACK_ACCESS_KEY || bsConfig.accessKey,
-    tunnelIdentifier: bsConfig.tunnelIdentifier,
-    jarFile: process.env.BROWSER_STACK_TUNNEL_JAR || bsConfig.jarFile,
-    hosts: [{
-      name: config.hostname,
-      port: config.port,
-      sslFlag: 0
-    }]
-  });
 
-  tunnel.start(function(error) {
-    if (error) {
-      log.error('Can not establish the tunnel.\n%s', error.toString());
-      deferred.reject(error);
+  ngrok.connect({ proto: 'tcp', addr: config.port, authtoken: process.env.NGROK_AUTHTOKEN }, function (err, url) {
+    if (err) {
+      log.error('Can not establish the tunnel.\n%s', err.toString());
+      deferred.reject(err);
     } else {
-      log.debug('Tunnel established.')
-      deferred.resolve();
+      log.debug('Tunnel established.');
+      deferred.resolve(url.replace('tcp://', 'http://'));
     }
   });
 
+
   emitter.on('exit', function(done) {
     log.debug('Shutting down the tunnel.');
-    tunnel.stop(function(error) {
-      done();
-    });
+    ngrok.disconnect();
+    ngrok.kill();
+    done();
   });
 
   return deferred.promise;
@@ -116,8 +106,15 @@ var BrowserStackBrowser = function(id, emitter, args, logger,
         settings.real_mobile = args.real_mobile;
     }
 
+    settings.video = !(settings.real_mobile || settings.os.match(/ios$/i));
+
     this.url = url;
+    var self = this;
+
     tunnel.then(function() {
+      self.url = url;
+      settings.url = url;
+
       client.createWorker(settings, function(error, worker) {
         var sessionUrlShowed = false;
 

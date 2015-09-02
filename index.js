@@ -21,14 +21,23 @@ var createBrowserStackTunnel = function(logger, config, emitter) {
   if (typeof process.env.NGROK_AUTHTOKEN === 'undefined' || typeof process.env.NGROK_PROTO === 'undefined') {
     deferred.reject(new Error('Missing ngrok credentials'));
   } else {
-    ngrok.connect({ proto: process.env.NGROK_PROTO, addr: config.port, authtoken: process.env.NGROK_AUTHTOKEN }, function (err, url) {
+    var token = process.env.NGROK_AUTHTOKEN;
+
+    ngrok.authtoken(token, function (err, token) {
       if (err) {
-        log.error('Can not establish the tunnel.\n%s', err.toString());
         deferred.reject(err);
-      } else {
-        log.debug('Tunnel established.');
-        deferred.resolve(url.replace('tcp://', 'http://'));
+        return;
       }
+
+      ngrok.connect({ proto: process.env.NGROK_PROTO, addr: config.port, port: config.port }, function (err, url) {
+        if (err) {
+          log.error('Can not establish the tunnel.\n%s', err.toString());
+          deferred.reject(err);
+        } else {
+          log.debug('Tunnel established.');
+          deferred.resolve(url.replace('tcp://', 'http://'));
+        }
+      });
     });
   }
 

@@ -18,16 +18,19 @@ var createBrowserStackTunnel = function(logger, config, emitter) {
 
   var deferred = q.defer();
 
-  ngrok.connect({ proto: 'tcp', addr: config.port, authtoken: process.env.NGROK_AUTHTOKEN }, function (err, url) {
-    if (err) {
-      log.error('Can not establish the tunnel.\n%s', err.toString());
-      deferred.reject(err);
-    } else {
-      log.debug('Tunnel established.');
-      deferred.resolve(url.replace('tcp://', 'http://'));
-    }
-  });
-
+  if (typeof process.env.NGROK_AUTHTOKEN === 'undefined' || typeof process.env.NGROK_PROTO === 'undefined') {
+    deferred.reject(new Error('Missing ngrok credentials'));
+  } else {
+    ngrok.connect({ proto: process.env.NGROK_PROTO, addr: config.port, authtoken: process.env.NGROK_AUTHTOKEN }, function (err, url) {
+      if (err) {
+        log.error('Can not establish the tunnel.\n%s', err.toString());
+        deferred.reject(err);
+      } else {
+        log.debug('Tunnel established.');
+        deferred.resolve(url.replace('tcp://', 'http://'));
+      }
+    });
+  }
 
   emitter.on('exit', function(done) {
     log.debug('Shutting down the tunnel.');
@@ -114,7 +117,7 @@ var BrowserStackBrowser = function(id, emitter, args, logger,
     tunnel.then(function() {
       self.url = url;
       settings.url = url;
-
+console.log(settings);
       client.createWorker(settings, function(error, worker) {
         var sessionUrlShowed = false;
 

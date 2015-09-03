@@ -192,12 +192,12 @@ var BrowserStackBrowser = function(id, emitter, args, logger,
 
       if (workerId) {
         log.debug('Killing %s (worker %s).', browserName, workerId);
-        client.terminateWorker(workerId, function() {
+//        client.terminateWorker(workerId, function() {
           log.debug('%s (worker %s) successfully killed.', browserName, workerId);
           workerId = null;
           captured = false;
           alreadyKilling.resolve();
-        });
+//        });
       } else {
         alreadyKilling.resolve();
       }

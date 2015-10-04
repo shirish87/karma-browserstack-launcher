@@ -1,6 +1,7 @@
 var q = require('q')
 var api = require('browserstack')
 var BrowserStackTunnel = require('browserstacktunnel-wrapper')
+var WorkerManager = require('./worker').WorkerManager
 
 var createBrowserStackTunnel = function (logger, config, emitter) {
   var log = logger.create('launcher.browserstack')
@@ -50,6 +51,11 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
         log.error(error)
       }
 
+      var workerManager = WorkerManager.getInstance()
+      if (workerManager.isPolling) {
+        workerManager.stopPolling()
+      }
+
       done()
     })
   })
@@ -61,10 +67,28 @@ var createBrowserStackClient = function (/* config.browserStack */ config) {
   var env = process.env
 
   // TODO(vojta): handle no username/pwd
-  return api.createClient({
+  var client = api.createClient({
     username: env.BROWSER_STACK_USERNAME || config.username,
     password: env.BROWSER_STACK_ACCESS_KEY || config.accessKey
   })
+
+  var pollingTimeout = config.pollingTimeout || 1000
+
+  var workerManager = WorkerManager.getInstance()
+  if (!workerManager.isPolling) {
+    workerManager.startPolling(client, pollingTimeout, function (err) {
+      if (err) {
+        console.error(err)
+      }
+    })
+  }
+
+  var browserStackClient = {
+    client: client,
+    workerManager: workerManager
+  }
+
+  return browserStackClient
 }
 
 var formatError = function (error) {
@@ -78,8 +102,11 @@ var formatError = function (error) {
 
 var BrowserStackBrowser = function (id, emitter, args, logger,
   /* config */ config,
-  /* browserStackTunnel */ tunnel, /* browserStackClient */ client) {
+  /* browserStackTunnel */ tunnel, /* browserStackClient */ browserStackClient) {
   var self = this
+  var client = browserStackClient.client
+  var workerManager = browserStackClient.workerManager
+
   var workerId = null
   var captured = false
   var alreadyKilling = null
@@ -94,7 +121,6 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
   var captureTimeout = config.captureTimeout || 0
   var captureTimeoutId
   var retryLimit = bsConfig.retryLimit || 3
-  var pollingTimeout = bsConfig.pollingTimeout || 1000
 
   this.start = function (url) {
     // TODO(vojta): handle non os/browser/version
@@ -132,43 +158,33 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
         workerId = worker.id
         alreadyKilling = null
 
-        var whenRunning = function () {
-          log.debug('%s job started with id %s', browserName, workerId)
-
-          if (captureTimeout) {
-            captureTimeoutId = setTimeout(self._onTimeout, captureTimeout)
+        worker = workerManager.registerWorker(worker)
+        worker.on('status', function (status) {
+          // TODO(vojta): show immediately in createClient callback once this gets fixed:
+          // https://github.com/browserstack/api/issues/10
+          if (!sessionUrlShowed) {
+            log.info('%s session at %s', browserName, worker.browser_url)
+            sessionUrlShowed = true
           }
-        }
 
-        var waitForWorkerRunning = function () {
-          client.getWorker(workerId, function (error, w) {
-            if (error) {
-              log.error('Can not get worker %s status %s\n  %s', workerId, browserName, formatError(error))
-              return emitter.emit('browser_process_failure', self)
-            }
+          switch (status) {
+            case 'running':
+              log.debug('%s job started with id %s', browserName, workerId)
 
-            // TODO(vojta): show immediately in createClient callback once this gets fixed:
-            // https://github.com/browserstack/api/issues/10
-            if (!sessionUrlShowed) {
-              log.info('%s session at %s', browserName, w.browser_url)
-              sessionUrlShowed = true
-            }
+              if (captureTimeout) {
+                captureTimeoutId = setTimeout(self._onTimeout, captureTimeout)
+              }
+              break
 
-            if (w.status === 'running') {
-              whenRunning()
-            } else {
-              log.debug('%s job with id %s still in queue.', browserName, workerId)
-              setTimeout(waitForWorkerRunning, pollingTimeout)
-            }
-          })
-        }
+            case 'queue':
+              log.debug('%s job with id %s in queue.', browserName, workerId)
+              break
 
-        if (worker.status === 'running') {
-          whenRunning()
-        } else {
-          log.debug('%s job queued with id %s.', browserName, workerId)
-          setTimeout(waitForWorkerRunning, pollingTimeout)
-        }
+            case 'delete':
+              log.debug('%s job with id %s has been deleted.', browserName, workerId)
+              break
+          }
+        })
       })
     }, function () {
       emitter.emit('browser_process_failure', self)

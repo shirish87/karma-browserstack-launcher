@@ -86,7 +86,7 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
   return deferred.promise
 }
 
-var createBrowserStackClient = function (/* config.browserStack */ config) {
+var createBrowserStackClient = function (/* config.browserStack */config) {
   var env = process.env
 
   // TODO(vojta): handle no username/pwd

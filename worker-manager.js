@@ -60,22 +60,19 @@ WorkerManager.prototype.startPolling = function startPolling (client, pollingTim
       return (callback ? callback(err) : null)
     }
 
-    updatedWorkers = updatedWorkers || []
-    var activeWorkerIds = updatedWorkers.map(function (worker) {
-      return worker.id
-    })
+    var activeWorkers = (updatedWorkers || []).reduce(function (o, worker) {
+      o[worker.id] = worker
+      return o
+    }, {})
 
-    // process deletions
-    for (var i = 0, l = self.workers.length; i < l; i++) {
-      var worker = self.workers[i]
-      if (activeWorkerIds.indexOf(worker.id) === -1) {
-        self.unregisterWorker(worker)
+    Object.keys(self.workers).forEach(function (workerId) {
+      if (activeWorkers[workerId]) {
+        // process updates
+        self.updateWorker(activeWorkers[workerId])
+      } else {
+        // process deletions
+        self.unregisterWorker(self.workers[workerId])
       }
-    }
-
-    // process updates
-    updatedWorkers.forEach(function (workerData) {
-      self.updateWorker(workerData)
     })
 
     self._pollHandle = setTimeout(function () {

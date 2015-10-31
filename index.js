@@ -2,7 +2,7 @@ var q = require('q')
 var api = require('browserstack')
 var BrowserStackTunnel = require('browserstacktunnel-wrapper')
 var os = require('os')
-var WorkerManager = require('./worker').WorkerManager
+var workerManager = require('./worker-manager')
 
 var createBrowserStackTunnel = function (logger, config, emitter) {
   var log = logger.create('launcher.browserstack')
@@ -75,7 +75,6 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
         log.error(error)
       }
 
-      var workerManager = WorkerManager.getInstance()
       if (workerManager.isPolling) {
         workerManager.stopPolling()
       }
@@ -98,7 +97,6 @@ var createBrowserStackClient = function (/* config.browserStack */ config) {
 
   var pollingTimeout = config.pollingTimeout || 1000
 
-  var workerManager = WorkerManager.getInstance()
   if (!workerManager.isPolling) {
     workerManager.startPolling(client, pollingTimeout, function (err) {
       if (err) {
@@ -107,12 +105,7 @@ var createBrowserStackClient = function (/* config.browserStack */ config) {
     })
   }
 
-  var browserStackClient = {
-    client: client,
-    workerManager: workerManager
-  }
-
-  return browserStackClient
+  return client
 }
 
 var formatError = function (error) {
@@ -126,10 +119,8 @@ var formatError = function (error) {
 
 var BrowserStackBrowser = function (id, emitter, args, logger,
   /* config */ config,
-  /* browserStackTunnel */ tunnel, /* browserStackClient */ browserStackClient) {
+  /* browserStackTunnel */ tunnel, /* browserStackClient */ client) {
   var self = this
-  var client = browserStackClient.client
-  var workerManager = browserStackClient.workerManager
 
   var workerId = null
   var captured = false

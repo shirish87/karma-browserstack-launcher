@@ -22,13 +22,13 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
     return q()
   }
 
-  if (!bsConfig.localIdentifier) {
-    if (bsConfig.tunnelIdentifier) {
+  if (!bsRunConfig.localIdentifier) {
+    if (bsRunConfig.tunnelIdentifier) {
       // Back compat; the option was renamed.
-      bsConfig.localIdentifier = bsConfig.tunnelIdentifier
-      delete bsConfig.tunnelIdentifier
+      bsRunConfig.localIdentifier = bsRunConfig.tunnelIdentifier
+      delete bsRunConfig.tunnelIdentifier
     }
-    bsConfig.localIdentifier = 'karma' + Math.random()
+    bsRunConfig.localIdentifier = 'karma' + Math.random()
   }
 
   if (bsBinaryBasePath) {

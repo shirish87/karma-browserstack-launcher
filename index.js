@@ -1,8 +1,12 @@
 var q = require('q')
 var api = require('browserstack')
 var BrowserStackTunnel = require('browserstacktunnel-wrapper')
+var localtunnel = require('localtunnel')
 var os = require('os')
 var workerManager = require('./worker-manager')
+
+var localUrlPattern = /^http:\/\/localhost:\d+/
+
 
 var createBrowserStackTunnel = function (logger, config, emitter) {
   var log = logger.create('launcher.browserstack')
@@ -28,59 +32,85 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
     return q()
   }
 
-  bsRunConfig.localIdentifier = bsRunConfig.localIdentifier || 'karma' + Math.random()
-  bsConfig.tunnelIdentifier = bsRunConfig.localIdentifier
-
-  if (bsBinaryBasePath) {
-    switch (os.platform()) {
-      case 'linux':
-        switch (os.arch()) {
-          case 'x64':
-            bsRunConfig.linux64Bin = bsBinaryBasePath
-            break
-          case 'ia32':
-            bsRunConfig.linux32Bin = bsBinaryBasePath
-            break
-        }
-        break
-      case 'darwin':
-        bsRunConfig.osxBin = bsBinaryBasePath
-        break
-      default:
-        bsRunConfig.win32Bin = bsBinaryBasePath
-        break
-    }
-  }
-
-  log.debug('Establishing the tunnel on %s:%s', config.hostname, config.port)
 
   var deferred = q.defer()
-  var tunnel = new BrowserStackTunnel(bsRunConfig)
 
-  tunnel.start(function (error) {
-    if (error) {
-      log.error('Can not establish the tunnel.\n%s', error.toString())
-      deferred.reject(error)
-    } else {
-      log.debug('Tunnel established.')
-      deferred.resolve()
-    }
-  })
+  if (bsConfig.localtunnel !== true) {
+    bsRunConfig.localIdentifier = bsRunConfig.localIdentifier || 'karma' + Math.random()
+    bsConfig.tunnelIdentifier = bsRunConfig.localIdentifier
 
-  emitter.on('exit', function (done) {
-    log.debug('Shutting down the tunnel.')
-    tunnel.stop(function (error) {
-      if (error) {
-        log.error(error)
+    if (bsBinaryBasePath) {
+      switch (os.platform()) {
+        case 'linux':
+          switch (os.arch()) {
+            case 'x64':
+              bsRunConfig.linux64Bin = bsBinaryBasePath
+              break
+            case 'ia32':
+              bsRunConfig.linux32Bin = bsBinaryBasePath
+              break
+          }
+          break
+        case 'darwin':
+          bsRunConfig.osxBin = bsBinaryBasePath
+          break
+        default:
+          bsRunConfig.win32Bin = bsBinaryBasePath
+          break
       }
+    }
+
+    log.debug('Establishing the tunnel on %s:%s', config.hostname, config.port)
+    var tunnel = new BrowserStackTunnel(bsRunConfig)
+
+    tunnel.start(function (error) {
+      if (error) {
+        log.error('Can not establish the tunnel.\n%s', error.toString())
+        deferred.reject(error)
+      } else {
+        log.debug('Tunnel established.')
+        deferred.resolve(tunnel)
+      }
+    })
+
+    emitter.on('exit', function (done) {
+      log.debug('Shutting down the tunnel.')
+      tunnel.stop(function (error) {
+        if (error) {
+          log.error(error)
+        }
+
+        if (workerManager.isPolling) {
+          workerManager.stopPolling()
+        }
+
+        done()
+      })
+    })
+
+  } else {
+
+    var tunnel = localtunnel(config.port, function (error, tunnel) {
+      if (error) {
+        log.error('Can not establish the LocalTunnel.\n%s', error.toString())
+        deferred.reject(error)
+      } else {
+        log.debug('LocalTunnel established.')
+        deferred.resolve(tunnel)
+      }
+    })
+
+    emitter.on('exit', function (done) {
+      log.debug('Shutting down the LocalTunnel.')
 
       if (workerManager.isPolling) {
         workerManager.stopPolling()
       }
 
+      tunnel.close()
       done()
     })
-  })
+  }
 
   return deferred.promise
 }
@@ -165,7 +195,12 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
     }
 
     this.url = url
-    tunnel.then(function () {
+    tunnel.then(function (tunnel) {
+      if (tunnel.url) {
+        settings.url = settings.url.replace(localUrlPattern, tunnel.url)
+        self.url = self.url.replace(localUrlPattern, tunnel.url)
+      }
+
       client.createWorker(settings, function (error, worker) {
         var sessionUrlShowed = false
 

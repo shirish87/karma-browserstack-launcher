@@ -96,7 +96,9 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
         deferred.reject(error)
       } else {
         log.debug('LocalTunnel established.')
-        deferred.resolve(publicUrl)
+
+	// hack: using http instead of https to avoid ssl errors on custom domain
+        deferred.resolve(publicUrl && publicUrl.replace(/^https/, 'http'))
       }
     })
 

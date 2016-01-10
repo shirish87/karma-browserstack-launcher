@@ -17,7 +17,7 @@
   "dependencies": {
     "browserstack": "1.2.0",
     "browserstacktunnel-wrapper": "~1.4.2",
-    "localtunnel": "1.8.0",
+    "ngrok": "shirish87/ngrok#custom-bin",
     "q": "~1.4.1"
   },
   "peerDependencies": {

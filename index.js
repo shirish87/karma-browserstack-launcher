@@ -1,7 +1,7 @@
 var q = require('q')
 var api = require('browserstack')
 var BrowserStackTunnel = require('browserstacktunnel-wrapper')
-var localtunnel = require('localtunnel')
+var ngrok = require('ngrok')
 var os = require('os')
 var workerManager = require('./worker-manager')
 
@@ -90,13 +90,13 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
 
   } else {
 
-    var tunnel = localtunnel(config.port, function (error, tunnel) {
+    ngrok.connect(config.port, function (error, publicUrl) {
       if (error) {
         log.error('Can not establish the LocalTunnel.\n%s', error.toString())
         deferred.reject(error)
       } else {
         log.debug('LocalTunnel established.')
-        deferred.resolve(tunnel)
+        deferred.resolve(publicUrl)
       }
     })
 
@@ -107,7 +107,7 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
         workerManager.stopPolling()
       }
 
-      tunnel.close()
+      ngrok.disconnect()
       done()
     })
   }
@@ -195,10 +195,10 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
     }
 
     this.url = url
-    tunnel.then(function (tunnel) {
-      if (tunnel.url) {
-        settings.url = settings.url.replace(localUrlPattern, tunnel.url)
-        self.url = self.url.replace(localUrlPattern, tunnel.url)
+    tunnel.then(function (publicUrl) {
+      if (publicUrl) {
+        settings.url = settings.url.replace(localUrlPattern, publicUrl)
+        self.url = self.url.replace(localUrlPattern, publicUrl)
       }
 
       client.createWorker(settings, function (error, worker) {

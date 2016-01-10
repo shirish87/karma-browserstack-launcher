@@ -159,6 +159,7 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
   baseLauncherDecorator(self)
 
   var workerId = null
+  var worker = null
   var captured = false
   var alreadyKilling = null
   var log = logger.create('launcher.browserstack')
@@ -203,7 +204,7 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
         self.url = self.url.replace(localUrlPattern, publicUrl)
       }
 
-      client.createWorker(settings, function (error, worker) {
+      client.createWorker(settings, function (error, w) {
         var sessionUrlShowed = false
 
         if (error) {
@@ -211,10 +212,10 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
           return emitter.emit('browser_process_failure', self)
         }
 
-        workerId = worker.id
+        workerId = w.id
         alreadyKilling = null
 
-        worker = workerManager.registerWorker(worker)
+        worker = workerManager.registerWorker(w)
         worker.on('status', function (status) {
           // TODO(vojta): show immediately in createClient callback once this gets fixed:
           // https://github.com/browserstack/api/issues/10
@@ -223,26 +224,30 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
             sessionUrlShowed = true
           }
 
+          log.info('%s is [%s] at %s', browserName, status, worker.browser_url)
+
           switch (status) {
             case 'running':
               log.debug('%s job started with id %s', browserName, workerId)
 
               if (captureTimeout) {
+                log.info('Setting timeout: %s for worker %s', browserName, workerId)
                 captureTimeoutId = setTimeout(self._onTimeout, captureTimeout)
               }
               break
 
             case 'queue':
-              log.debug('%s job with id %s in queue.', browserName, workerId)
+              log.info('%s job with id %s in queue.', browserName, workerId)
               break
 
             case 'delete':
-              log.debug('%s job with id %s has been deleted.', browserName, workerId)
+              log.info('%s job with id %s has been deleted.', browserName, workerId)
               break
           }
         })
       })
     }, function () {
+      log.warn('Tunnel failure')
       emitter.emit('browser_process_failure', self)
     })
   }
@@ -252,9 +257,9 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
       alreadyKilling = q.defer()
 
       if (workerId) {
-        log.debug('Killing %s (worker %s).', browserName, workerId)
+        log.info('Killing %s (worker %s).', browserName, workerId)
         client.terminateWorker(workerId, function () {
-          log.debug('%s (worker %s) successfully killed.', browserName, workerId)
+          log.info('%s (worker %s) successfully killed.', browserName, workerId)
           workerId = null
           captured = false
           alreadyKilling.resolve()
@@ -279,6 +284,7 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
 
   this.markCaptured = function () {
     captured = true
+    log.info('%s has been captured. Session: %s', browserName, worker && worker.browser_url)
 
     if (captureTimeoutId) {
       clearTimeout(captureTimeoutId)
@@ -304,6 +310,7 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
       if (retryLimit--) {
         self.start(self.url)
       } else {
+        log.warn('%s has failed. Session: %s', browserName, worker && worker.browser_url)
         emitter.emit('browser_process_failure', self)
       }
     })

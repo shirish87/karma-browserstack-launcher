@@ -230,8 +230,7 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
             case 'running':
               log.debug('%s job started with id %s', browserName, workerId)
 
-              if (captureTimeout) {
-                log.info('Setting timeout: %s for worker %s', browserName, workerId)
+              if (captureTimeout && !captured) {
                 captureTimeoutId = setTimeout(self._onTimeout, captureTimeout)
               }
               break
@@ -257,9 +256,15 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
       alreadyKilling = q.defer()
 
       if (workerId) {
-        log.info('Killing %s (worker %s).', browserName, workerId)
+        log.debug('Killing %s (worker %s).', browserName, workerId)
         client.terminateWorker(workerId, function () {
-          log.info('%s (worker %s) successfully killed.', browserName, workerId)
+          log.debug('%s (worker %s) successfully killed.', browserName, workerId)
+
+          if (captureTimeoutId) {
+            clearTimeout(captureTimeoutId)
+            captureTimeoutId = null
+          }
+
           workerId = null
           captured = false
           alreadyKilling.resolve()

@@ -91,7 +91,7 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
 
   } else {
 
-    ngrok.connect(config.port, function (error, publicUrl) {
+    ngrok.connect({ port: config.port, proto: 'http' }, function (error, publicUrl) {
       if (error) {
         log.error('Can not establish the LocalTunnel.\n%s', error.toString())
         deferred.reject(error)

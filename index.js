@@ -34,8 +34,9 @@ var createBrowserStackTunnel = function (logger, config, emitter) {
 
 
   var deferred = q.defer()
+  var tunnelType = (bsConfig.tunnelType && bsConfig.tunnelType.toLowerCase()) || 'ngrok';
 
-  if (bsConfig.localtunnel !== true) {
+  if (tunnelType === 'browserstack') {
     bsRunConfig.localIdentifier = bsRunConfig.localIdentifier || 'karma' + Math.random()
     bsConfig.tunnelIdentifier = bsRunConfig.localIdentifier
 
@@ -181,11 +182,11 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
       os_version: args.os_version,
       device: args.device,
       browser: args.browser,
-      tunnelIdentifier: !bsConfig.localtunnel ? bsConfig.tunnelIdentifier : null,
+      tunnelIdentifier: (bsConfig.tunnelType === 'browserstack' && bsConfig.tunnelIdentifier) || null,
       // TODO(vojta): remove "version" (only for B-C)
       browser_version: args.browser_version || args.version || 'latest',
       url: url + '?id=' + id,
-      'browserstack.tunnel': !(bsConfig.localtunnel),
+      'browserstack.tunnel': (bsConfig.tunnelType === 'browserstack'),
       timeout: bsConfig.timeout || 300,
       project: bsConfig.project,
       name: bsConfig.name || 'Karma test',
@@ -198,8 +199,9 @@ var BrowserStackBrowser = function (id, emitter, args, logger,
     }
 
     this.url = url
-    tunnel.then(function (publicUrl) {
-      if (publicUrl) {
+    tunnel.then(function (tunnel) {
+      if (typeof tunnel === 'string') {
+        var publicUrl = tunnel;
         settings.url = settings.url.replace(localUrlPattern, publicUrl)
         self.url = self.url.replace(localUrlPattern, publicUrl)
       }
